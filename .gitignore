@@ -1,0 +1,13 @@
+# metadata
+.metadata/*
+# build生成ファイル
+Debug/
+Release/
+# 単語辞書
+.settings/
+# iocからgenerateした際に生成される．project path.
+.mxproject
+# debugger config
+*.launch
+# eclipse RSE
+RemoteSystemsTempFiles/
