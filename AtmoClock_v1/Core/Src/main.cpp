@@ -75,6 +75,7 @@ static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 void setPWM(TIM_HandleTypeDef *htim, uint32_t Channel, float duty);
 void setSegment16(uint16_t data, GPIO_TypeDef* serPort, uint16_t serPin, GPIO_TypeDef* srclkPort, uint16_t srclkPin, GPIO_TypeDef* rclkPort, uint16_t rclkPin);
+void segmentStrobe(GPIO_TypeDef* rclkPort, uint16_t rclkPin);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -128,12 +129,12 @@ int main(void)
   bool flag = true;
   Mcp47x6 dac(hi2c1);
 
-  Sht3x sht(hi2c1);
-  float temp2, humi2;
+//  Sht3x sht(hi2c1);
+//  float temp2, humi2;
 
-  Bmp180 bmp(hi2c1);
-  while(!bmp.TestConnection());
-  bmp.Init();
+//  Bmp180 bmp(hi2c1);
+//  while(!bmp.TestConnection());
+//  bmp.Init();
 
   GPIO_TypeDef* dataPorts[] = {GPIOA, GPIOB, GPIOB, GPIOB};
   uint16_t dataPins[] = {GPIO_PIN_15, GPIO_PIN_3, GPIO_PIN_4, GPIO_PIN_5};
@@ -155,7 +156,7 @@ int main(void)
   lcd2.Clear();
   lcd2.Puts("HOME!");
 
-  int i = 0;
+  int i = 34500;
 
 //  if(HAL_ADCEx_Calibration_Start(&hadc) != HAL_OK)
 //    Error_Handler();
@@ -185,30 +186,40 @@ int main(void)
     }
     dac.SetDacOut(volt);
 
-    sht.GetTemperatureHumiditySingleShot(&temp2, &humi2);
+//    sht.GetTemperatureHumiditySingleShot(&temp2, &humi2);
     lcd.Home();
-    sprintf(str, "%d", (int)temp2);
+//    sprintf(str, "%d", (int)temp2);
     lcd.Puts(str);
-    sprintf(str, "%d", (int)humi2);
+//    sprintf(str, "%d", (int)humi2);
     lcd.SetCursor(0,4);
     lcd.Puts(str);
     sprintf(str, "%4d", (int)adcData[0]);
     lcd.SetCursor(1,0);
     lcd.Puts(str);
 
-    printf("TEMP1: %d  Deg.\r\n", (int)temp2);
-    printf("HUMI1: %d  %%  \r\n", (int)humi2);
-    printf("TEMP2: %d  Deg.\r\n", (int)bmp.GetTemperatureCelsius());
-    printf("PRES2: %d  hPa \r\n", (int)bmp.GetPressure(3)/100);
+//    printf("TEMP1: %d  Deg.\r\n", (int)temp2);
+//    printf("HUMI1: %d  %%  \r\n", (int)humi2);
+//    printf("TEMP2: %d  Deg.\r\n", (int)bmp.GetTemperatureCelsius());
+//    printf("PRES2: %d  hPa \r\n", (int)bmp.GetPressure(3)/100);
 //    printf("Alt.: %4.2f m  \r\n", bmp.CalcAltitude(humi2, 0));
 
     printf("normal loop ended\r\n");
 
-    setSegment16(int2bin[i], GPIOA, GPIO_PIN_4, GPIOA,GPIO_PIN_5, GPIOA,GPIO_PIN_0);
+    int tmp;
+    tmp = i;
+    for(int digit=5;digit>=0;digit--){
+      setSegment16(int2bin[tmp%10], GPIOA, GPIO_PIN_4, GPIOA,GPIO_PIN_5, GPIOA,GPIO_PIN_0);
+      tmp/=10;
+    }
+    segmentStrobe(GPIOA,GPIO_PIN_0);
     i++;
-    if (i>=10)
-      i = 0;
-    HAL_Delay(1);
+    if ((i%100)%60==0)
+      i+=40;
+    if ((i%10000)%6000==0)
+      i+=4000;
+    if (i%240000==0)
+      i=0;
+    HAL_Delay(1000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -638,11 +649,11 @@ void setSegment16(uint16_t data, GPIO_TypeDef* serPort, uint16_t serPin, GPIO_Ty
     HAL_GPIO_WritePin(srclkPort, srclkPin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(srclkPort, srclkPin, GPIO_PIN_RESET);
   }
+}
+void segmentStrobe(GPIO_TypeDef* rclkPort, uint16_t rclkPin){
   HAL_GPIO_WritePin(rclkPort, rclkPin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(rclkPort, rclkPin, GPIO_PIN_RESET);
 }
-
-
 /* USER CODE END 4 */
 
 /**

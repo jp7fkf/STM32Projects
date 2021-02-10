@@ -83,6 +83,7 @@ static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 void setPWM(TIM_HandleTypeDef *htim, uint32_t Channel, float duty);
 void setSegment16(GPIO_TypeDef* serPort, uint16_t serPin, GPIO_TypeDef* srclkPort, uint16_t srclkPin, GPIO_TypeDef* rclkPort, uint16_t rclkPin, uint16_t *data, uint8_t len);
+void convertInt2Bin(int val, uint16_t *data, uint8_t len);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -128,7 +129,7 @@ int main(void)
 
   setbuf(stdout, NULL);
 
-  uint16_t data[2];
+  uint16_t data[6];
 
   St7032 lcd(hi2c1);
   lcd.Init();
@@ -165,7 +166,7 @@ int main(void)
   lcd2.Clear();
   lcd2.Puts("HOME!");
 
-  int i = 0;
+  int i = 999909;
 
 //  if(HAL_ADCEx_Calibration_Start(&hadc) != HAL_OK)
 //    Error_Handler();
@@ -214,12 +215,9 @@ int main(void)
 
 //    printf("normal loop ended\r\n");
 
-    data[0] = int2bin[i%10];
-    data[1] = int2bin[(int)((i%100)/10)];
-    setSegment16(GPIOA, GPIO_PIN_4, GPIOA,GPIO_PIN_5, GPIOA,GPIO_PIN_0, data, 2);
+    convertInt2Bin(i, data, 6);
+    setSegment16(GPIOA, GPIO_PIN_4, GPIOA,GPIO_PIN_5, GPIOA,GPIO_PIN_0, data, 6);
     i++;
-    if (i>=100)
-      i = 0;
     HAL_Delay(100);
     /* USER CODE END WHILE */
 
@@ -723,6 +721,12 @@ void setSegment16(GPIO_TypeDef* serPort, uint16_t serPin, GPIO_TypeDef* srclkPor
   HAL_GPIO_WritePin(rclkPort, rclkPin, GPIO_PIN_RESET);
 }
 
+void convertInt2Bin(int val, uint16_t *data, uint8_t len){
+  for(int i=0; i<len; i++){
+    data[i] = int2bin[val%10];
+    val /= 10;
+  }
+}
 
 /* USER CODE END 4 */
 
