@@ -1,34 +1,31 @@
 /* USER CODE BEGIN Header */
 /**
- ******************************************************************************
- * @file           : main.c
- * @brief          : Main program body
- ******************************************************************************
- * @attention
- *
- * <h2><center>&copy; Copyright (c) 2020 STMicroelectronics.
- * All rights reserved.</center></h2>
- *
- * This software component is licensed by ST under BSD 3-Clause license,
- * the "License"; You may not use this file except in compliance with the
- * License. You may obtain a copy of the License at:
- *                        opensource.org/licenses/BSD-3-Clause
- *
- ******************************************************************************
- */
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : Main program body
+  ******************************************************************************
+  * @attention
+  *
+  * <h2><center>&copy; Copyright (c) 2021 STMicroelectronics.
+  * All rights reserved.</center></h2>
+  *
+  * This software component is licensed by ST under BSD 3-Clause license,
+  * the "License"; You may not use this file except in compliance with the
+  * License. You may obtain a copy of the License at:
+  *                        opensource.org/licenses/BSD-3-Clause
+  *
+  ******************************************************************************
+  */
 /* USER CODE END Header */
-
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
-#include "bmp180.hpp"
-#include "st7032.hpp"
-#include "sht3x.hpp"
 #include "mcp47x6.hpp"
 #include "hd44780.hpp"
+#include "rotaryencoder.hpp"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,6 +40,9 @@
 #else
 #define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
 #endif /* __GNUC__ */
+
+#define DEBUG
+#define ADC_CHAN_NUM 7
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -62,10 +62,9 @@ TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-static uint16_t adcData[1];
-const uint16_t int2bin[] = {0x6565 ,0x4001, 0xE4E4, 0xE4A5, 0xC181, 0xA5A5, 0xA5E5, 0x6401, 0xE5E5, 0xE5A5};
-int incremental = 0;
-RotaryEncoder renc(GPIOA, GPIO_PIN_3);
+static uint16_t adcData[ADC_CHAN_NUM];
+RotaryEncoder renc(GPIOB, GPIO_PIN_7);
+static int incremental = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -78,8 +77,7 @@ static void MX_I2C1_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
-void setPWM(TIM_HandleTypeDef *htim, uint32_t Channel, float duty);
-void setSegment16(GPIO_TypeDef* serPort, uint16_t serPin, GPIO_TypeDef* srclkPort, uint16_t srclkPin, GPIO_TypeDef* rclkPort, uint16_t rclkPin, uint16_t *data, uint8_t len);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -94,6 +92,7 @@ void setSegment16(GPIO_TypeDef* serPort, uint16_t serPin, GPIO_TypeDef* srclkPor
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+  setbuf(stdout, NULL);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -121,102 +120,74 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
+  GPIO_TypeDef* dataPorts[] = {GPIOB, GPIOB, GPIOA, GPIOA};
+  uint16_t dataPins[] = {GPIO_PIN_0, GPIO_PIN_1, GPIO_PIN_11, GPIO_PIN_12};
 
-  setbuf(stdout, NULL);
+  Hd44780 lcd(LCD_4BITMODE,
+              GPIOB, GPIO_PIN_3,
+              GPIOB, GPIO_PIN_4,
+              GPIOB, GPIO_PIN_5,
+              dataPorts, dataPins);
 
-  uint16_t data[2];
+  printf("booting...\r\n"
+		 "Electric Load v1\r\n"
+		 "Designed by FKF Tech.\r\n"
+		 "Developer: JP7FKF\r\n"
+		 "Initializing...\r\n");
 
-  St7032 lcd(hi2c1);
-  lcd.Init();
-  char str[8];
 
-  int volt = 0;
-  bool flag = true;
   Mcp47x6 dac(hi2c1);
 
-  Sht3x sht(hi2c1);
-  float temp2, humi2;
+  lcd.Init();
+  lcd.SetCursor(0, 0);
+  lcd.Puts("Electric Load v1");
+  lcd.SetCursor(1, 0);
+  lcd.Puts(" -- FKF Tech -- ");
+  HAL_Delay(800);
+  lcd.SetCursor(1, 0);
+  lcd.Puts("Initializing...");
+//  HAL_Delay(1500);
+  lcd.Clear();
+  lcd.SetCursor(0, 0);
+  lcd.Puts("Mode: CC    0.0A");
+  lcd.SetCursor(1, 0);
+  lcd.Puts(" 0.0V/ 0.0A/  0W");
 
-  Bmp180 bmp(hi2c1);
-  while(!bmp.TestConnection());
-  bmp.Init();
-
-  GPIO_TypeDef* dataPorts[] = {GPIOA, GPIOB, GPIOB, GPIOB};
-  uint16_t dataPins[] = {GPIO_PIN_15, GPIO_PIN_3, GPIO_PIN_4, GPIO_PIN_5};
-
-  Hd44780 lcd2(LCD_4BITMODE,
-              GPIOA, GPIO_PIN_6,
-              GPIOA, GPIO_PIN_7,
-              GPIOB, GPIO_PIN_0,
-              dataPorts, dataPins);
-  lcd2.Init();
-  lcd2.SendData('i');
-  lcd2.Puts("test123456");
-  lcd2.SetCursor(1, 2);
-  lcd2.Puts("JP7FKF");
-  HAL_Delay(1000);
-  lcd2.Clear();
-  lcd2.Puts("AH0CV!");
-  HAL_Delay(1000);
-  lcd2.Clear();
-  lcd2.Puts("HOME!");
-
-  int i = 0;
-
-//  if(HAL_ADCEx_Calibration_Start(&hadc) != HAL_OK)
-//    Error_Handler();
-  HAL_ADC_Start_DMA(&hadc,(uint32_t *)adcData, 1);
-
+  //  if(HAL_ADCEx_Calibration_Start(&hadc) != HAL_OK)
+  //    Error_Handler();
+  HAL_ADC_Start_DMA(&hadc,(uint32_t *)adcData, ADC_CHAN_NUM);
+  HAL_TIM_Base_Start_IT(&htim1);
+  int volt = 0;
+  bool flag = true;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-//    HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_0);
+	if (flag)
+	{
+//	  volt += 50;
+	  volt = 4095;
+	  if(volt >= 4095){
+		volt = 4095;
+		flag = false;
+	  }
+	}else{
+//	  volt -= 50;
+	  volt = -1;
+	  if(volt<0){
+		volt = 0;
+		flag = true;
+	  }
+	}
+	dac.SetDacOut(volt);
 
-    if (flag)
-    {
-      volt += 50;
-      if(volt >= 4095){
-        volt = 4095;
-        flag = false;
-      }
-    }else{
-      volt -= 50;
-      if(volt<0){
-        volt = 0;
-        flag = true;
-      }
-    }
-    dac.SetDacOut(volt);
-
-    sht.GetTemperatureHumiditySingleShot(&temp2, &humi2);
-    lcd.Home();
-    sprintf(str, "%d", (int)temp2);
-    lcd.Puts(str);
-    sprintf(str, "%d", (int)humi2);
-    lcd.SetCursor(0,4);
-    lcd.Puts(str);
-    sprintf(str, "%4d", (int)adcData[0]);
-    lcd.SetCursor(1,0);
-    lcd.Puts(str);
-
-//    printf("TEMP1: %d  Deg.\r\n", (int)temp2);
-//    printf("HUMI1: %d  %%  \r\n", (int)humi2);
-//    printf("TEMP2: %d  Deg.\r\n", (int)bmp.GetTemperatureCelsius());
-//    printf("PRES2: %d  hPa \r\n", (int)bmp.GetPressure(3)/100);
-//    printf("Alt.: %4.2f m  \r\n", bmp.CalcAltitude(humi2, 0));
-
-//    printf("normal loop ended\r\n");
-
-    data[0] = int2bin[i%10];
-    data[1] = int2bin[(int)((i%100)/10)];
-    setSegment16(GPIOA, GPIO_PIN_4, GPIOA,GPIO_PIN_5, GPIOA,GPIO_PIN_0, data, 2);
-    i++;
-    if (i>=100)
-      i = 0;
-    HAL_Delay(100);
+//	HAL_GPIO_TogglePin(GPIOB, beeper_Pin);
+//	HAL_Delay(1000);
+#ifdef DEBUG
+//	printf("[DEBUG]: hoge!\r\n");
+#endif
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -234,19 +205,18 @@ void SystemClock_Config(void)
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
   RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
-  /** Initializes the CPU, AHB and APB busses clocks 
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSI14;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSI14State = RCC_HSI14_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.HSI14CalibrationValue = 16;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
   }
-  /** Initializes the CPU, AHB and APB busses clocks 
+  /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1;
@@ -284,10 +254,10 @@ static void MX_ADC_Init(void)
   /* USER CODE BEGIN ADC_Init 1 */
 
   /* USER CODE END ADC_Init 1 */
-  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
   */
   hadc.Instance = ADC1;
-  hadc.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc.Init.Resolution = ADC_RESOLUTION_12B;
   hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
@@ -304,7 +274,7 @@ static void MX_ADC_Init(void)
   {
     Error_Handler();
   }
-  /** Configure for the selected ADC regular channel to be converted. 
+  /** Configure for the selected ADC regular channel to be converted.
   */
   sConfig.Channel = ADC_CHANNEL_0;
   sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
@@ -313,42 +283,42 @@ static void MX_ADC_Init(void)
   {
     Error_Handler();
   }
-  /** Configure for the selected ADC regular channel to be converted. 
+  /** Configure for the selected ADC regular channel to be converted.
   */
   sConfig.Channel = ADC_CHANNEL_1;
   if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  /** Configure for the selected ADC regular channel to be converted. 
+  /** Configure for the selected ADC regular channel to be converted.
   */
   sConfig.Channel = ADC_CHANNEL_2;
   if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  /** Configure for the selected ADC regular channel to be converted. 
+  /** Configure for the selected ADC regular channel to be converted.
   */
   sConfig.Channel = ADC_CHANNEL_3;
   if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  /** Configure for the selected ADC regular channel to be converted. 
+  /** Configure for the selected ADC regular channel to be converted.
   */
   sConfig.Channel = ADC_CHANNEL_4;
   if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  /** Configure for the selected ADC regular channel to be converted. 
+  /** Configure for the selected ADC regular channel to be converted.
   */
   sConfig.Channel = ADC_CHANNEL_5;
   if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  /** Configure for the selected ADC regular channel to be converted. 
+  /** Configure for the selected ADC regular channel to be converted.
   */
   sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
   if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
@@ -389,13 +359,13 @@ static void MX_I2C1_Init(void)
   {
     Error_Handler();
   }
-  /** Configure Analogue filter 
+  /** Configure Analogue filter
   */
   if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
   {
     Error_Handler();
   }
-  /** Configure Digital filter 
+  /** Configure Digital filter
   */
   if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
   {
@@ -426,9 +396,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 0;
+  htim1.Init.Prescaler = 9999;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 0;
+  htim1.Init.Period = 799;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -449,8 +419,6 @@ static void MX_TIM1_Init(void)
   }
   /* USER CODE BEGIN TIM1_Init 2 */
 
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
   /* USER CODE END TIM1_Init 2 */
 
 }
@@ -477,7 +445,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 0;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 0;
+  htim2.Init.Period = 4294967295;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -549,10 +517,10 @@ static void MX_USART1_UART_Init(void)
 
 }
 
-/** 
+/**
   * Enable DMA controller clock
   */
-static void MX_DMA_Init(void) 
+static void MX_DMA_Init(void)
 {
 
   /* DMA controller clock enable */
@@ -560,7 +528,7 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 2, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 
 }
@@ -580,39 +548,49 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, enable_led_Pin|GPIO_PIN_8|lcd_data5_Pin|lcd_data6_Pin 
-                          |lcd_data7_Pin|lcd_data8_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, enable_led_Pin|load_relay_Pin|lcd_data7_Pin|lcd_data8_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, lcd_rs_Pin|lcd_ena_Pin|lcd_rw_Pin|beeper_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, lcd_data5_Pin|lcd_data6_Pin|lcd_rs_Pin|lcd_rw_Pin
+                          |lcd_ena_Pin|beeper_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : enable_led_Pin PA8 lcd_data5_Pin lcd_data6_Pin 
-                           lcd_data7_Pin lcd_data8_Pin */
-  GPIO_InitStruct.Pin = enable_led_Pin|GPIO_PIN_8|lcd_data5_Pin|lcd_data6_Pin 
-                          |lcd_data7_Pin|lcd_data8_Pin;
+  /*Configure GPIO pins : enable_led_Pin load_relay_Pin lcd_data7_Pin lcd_data8_Pin */
+  GPIO_InitStruct.Pin = enable_led_Pin|load_relay_Pin|lcd_data7_Pin|lcd_data8_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : enable_sw_Pin */
-  GPIO_InitStruct.Pin = enable_sw_Pin;
+  /*Configure GPIO pins : enable_sw_Pin PA13 PA14 */
+  GPIO_InitStruct.Pin = enable_sw_Pin|GPIO_PIN_13|GPIO_PIN_14;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(enable_sw_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : io_button1_Pin io_button2_Pin renc_a_Pin renc_b_Pin */
-  GPIO_InitStruct.Pin = io_button1_Pin|io_button2_Pin|renc_a_Pin|renc_b_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : lcd_rs_Pin lcd_ena_Pin lcd_rw_Pin beeper_Pin */
-  GPIO_InitStruct.Pin = lcd_rs_Pin|lcd_ena_Pin|lcd_rw_Pin|beeper_Pin;
+  /*Configure GPIO pins : lcd_data5_Pin lcd_data6_Pin lcd_rs_Pin lcd_rw_Pin
+                           lcd_ena_Pin beeper_Pin */
+  GPIO_InitStruct.Pin = lcd_data5_Pin|lcd_data6_Pin|lcd_rs_Pin|lcd_rw_Pin
+                          |lcd_ena_Pin|beeper_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : renc_a_Pin */
+  GPIO_InitStruct.Pin = renc_a_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(renc_a_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : renc_b_Pin */
+  GPIO_InitStruct.Pin = renc_b_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(renc_b_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI4_15_IRQn, 3, 0);
+  HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
 
 }
 
@@ -631,72 +609,23 @@ int __io_putchar(int ch) {
 #endif
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
-//  HAL_Delay(1);
-//  printf("EXTI callback called!\r\n");
-  if (GPIO_Pin == GPIO_PIN_1){
-//    printf("gpio1!\r\n");
-//    setPWM(&htim1, TIM_CHANNEL_1, 0.7);
+  printf("EXTI callback called!\r\n");
+  if (GPIO_Pin == GPIO_PIN_6){
+    printf("gpio6!\r\n");
     incremental = renc.GetIncrementedValue(incremental, -10);
     printf("dir: %d\r\n", incremental);
+    HAL_Delay(10);
   }
-  if (GPIO_Pin == GPIO_PIN_3){
-//    printf("gpio3!\r\n");
-//    setPWM(&htim1, TIM_CHANNEL_1, 0.01);
-  }
-}
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-  if(htim == &htim3)
-    HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_0);
-//  if(htim == &htim14)
-//    printf("htim14 callback!\r\n");
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *AdcHandle){
-  setPWM(&htim1, TIM_CHANNEL_1, (float)adcData[0]/4096);
-//    printf("1:%4d, 2:%4d, 3:%4d, 4:%4d, 5:%4d\r\n", adcData[0],adcData[1],adcData[2],adcData[3],adcData[4]);
-  //  printf("ADC CH1 Value is %d\r\n",adcData[0]);
-  //  printf("ADC CH2 Value is %d\r\n",adcData[1]);
-  //  printf("ADC CH3 Value is %d\r\n",adcData[2]);
-  //  printf("ADC CH4 Value is %d\r\n",adcData[3]);
-  //  printf("ADC CH5 Value is %d\r\n",adcData[4]);
-  //  printf("ADC CH6 Value is %d\r\n",adcData[5]);
-  //  printf("ADC CH7 Value is %d\r\n",adcData[6]);
-  //  printf("ADC CH8 Value is %d\r\n",adcData[7]);
+#ifdef DEBUG
+	printf("[DEBUG]: ADC callback\r\n");
+//	for(int i=0;i<ADC_CHAN_NUM;i++){
+//		printf("[DEBUG]: adc%d: %d\r\n", i, adcData[i]);
+//	}
+#endif
 }
-
-void setPWM(TIM_HandleTypeDef *htim, uint32_t Channel, float duty)
-{
-  TIM_OC_InitTypeDef sConfigOC = {0};
-
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = (uint32_t)htim->Init.Period*duty;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-
-  if(HAL_TIM_PWM_ConfigChannel(htim, &sConfigOC, Channel) != HAL_OK)
-    Error_Handler();
-
-  if(HAL_TIM_PWM_Start(htim, Channel) != HAL_OK)
-    Error_Handler();
-}
-
-void setSegment16(GPIO_TypeDef* serPort, uint16_t serPin, GPIO_TypeDef* srclkPort, uint16_t srclkPin, GPIO_TypeDef* rclkPort, uint16_t rclkPin, uint16_t *data, uint8_t len){
-  for(int i=0;i<len;i++){
-    for(int j=0;j<16;j++){
-      HAL_GPIO_WritePin(serPort, serPin, (data[i] >> j) & 0x01 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(srclkPort, srclkPin, GPIO_PIN_SET);
-      HAL_GPIO_WritePin(srclkPort, srclkPin, GPIO_PIN_RESET);
-    }
-  }
-  HAL_GPIO_WritePin(rclkPort, rclkPin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(rclkPort, rclkPin, GPIO_PIN_RESET);
-}
-
-
 /* USER CODE END 4 */
 
 /**
@@ -706,8 +635,12 @@ void setSegment16(GPIO_TypeDef* serPort, uint16_t serPin, GPIO_TypeDef* srclkPor
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
   printf("HAL API Error Occurred!\r\n");
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
   /* USER CODE END Error_Handler_Debug */
 }
 
@@ -720,10 +653,10 @@ void Error_Handler(void)
   * @retval None
   */
 void assert_failed(uint8_t *file, uint32_t line)
-{ 
+{
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
-     tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
