@@ -34,5 +34,5 @@ void Mcp47x6::SetDacOut(uint16_t val) {
   uint8_t buf[2];
   buf[0] = (val >> 8) & 0x0F;
   buf[1] = val & 0xFF;
-  HAL_I2C_Master_Transmit(&hi2cx_, (MCP47x6_I2C_ADDRESS<<1)|0x00, buf, 2, MCP47x6_I2C_TIMEOUT);
+  HAL_I2C_Master_Transmit(hi2cx_, (MCP47x6_I2C_ADDRESS<<1)|0x00, buf, 2, MCP47x6_I2C_TIMEOUT);
 }

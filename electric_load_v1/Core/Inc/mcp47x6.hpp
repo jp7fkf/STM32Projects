@@ -38,11 +38,11 @@ constexpr unsigned int MCP47x6_I2C_TIMEOUT   = 1000; //timeout value of I2C tran
 
 class Mcp47x6 {
   public:
-    Mcp47x6(I2C_HandleTypeDef hi2cx):
+    Mcp47x6(I2C_HandleTypeDef *hi2cx):
       hi2cx_(hi2cx){}
     void SetDacOut(uint16_t val);
   private:
-    I2C_HandleTypeDef hi2cx_;
+    I2C_HandleTypeDef *hi2cx_;
 };
 
 #endif /* SRC_MCP47X6_HPP_ */

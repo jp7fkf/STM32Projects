@@ -43,6 +43,8 @@
 
 #define DEBUG
 #define ADC_CHAN_NUM 7
+#define KP 0.1
+#define KI 0.1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -64,6 +66,7 @@ UART_HandleTypeDef huart1;
 /* USER CODE BEGIN PV */
 static uint16_t adcData[ADC_CHAN_NUM];
 RotaryEncoder renc(GPIOB, GPIO_PIN_7);
+Mcp47x6 dac(&hi2c1);
 static int incremental = 0;
 /* USER CODE END PV */
 
@@ -77,7 +80,7 @@ static void MX_I2C1_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
-
+void update_command_value(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -130,13 +133,10 @@ int main(void)
               dataPorts, dataPins);
 
   printf("booting...\r\n"
-		 "Electric Load v1\r\n"
-		 "Designed by FKF Tech.\r\n"
-		 "Developer: JP7FKF\r\n"
-		 "Initializing...\r\n");
-
-
-  Mcp47x6 dac(hi2c1);
+         "Electric Load v1\r\n"
+         "Designed by FKF Tech.\r\n"
+         "Developer: JP7FKF\r\n"
+         "Initializing...\r\n");
 
   lcd.Init();
   lcd.SetCursor(0, 0);
@@ -159,34 +159,39 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim1);
   int volt = 0;
   bool flag = true;
+  char buf[16];
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	if (flag)
-	{
-//	  volt += 50;
-	  volt = 4095;
-	  if(volt >= 4095){
-		volt = 4095;
-		flag = false;
-	  }
-	}else{
-//	  volt -= 50;
-	  volt = -1;
-	  if(volt<0){
-		volt = 0;
-		flag = true;
-	  }
-	}
-	dac.SetDacOut(volt);
+    lcd.SetCursor(0, 12);
+    sprintf(buf, "%3d", incremental);
+    lcd.Puts(buf);
+    if (flag)
+    {
+  //    volt += 50;
+      volt = 4095;
+      if(volt >= 4095){
+     volt = 4095;
+     flag = false;
+      }
+    }else{
+  //    volt -= 50;
+      volt = -1;
+      if(volt<0){
+     volt = 0;
+     flag = true;
+      }
+    }
+    dac.SetDacOut(incremental);
 
-//	HAL_GPIO_TogglePin(GPIOB, beeper_Pin);
-//	HAL_Delay(1000);
+//  HAL_GPIO_TogglePin(GPIOB, beeper_Pin);
+//  HAL_Delay(1000);
 #ifdef DEBUG
-//	printf("[DEBUG]: hoge!\r\n");
+//  printf("[DEBUG]: hoge!\r\n");
+    // printf("[DEBUG]: adc: %d\r\n", adcData[0]);
 #endif
     /* USER CODE END WHILE */
 
@@ -578,7 +583,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : renc_a_Pin */
   GPIO_InitStruct.Pin = renc_a_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(renc_a_GPIO_Port, &GPIO_InitStruct);
 
@@ -609,22 +614,26 @@ int __io_putchar(int ch) {
 #endif
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
-  printf("EXTI callback called!\r\n");
   if (GPIO_Pin == GPIO_PIN_6){
-    printf("gpio6!\r\n");
-    incremental = renc.GetIncrementedValue(incremental, -10);
-    printf("dir: %d\r\n", incremental);
-    HAL_Delay(10);
+    incremental = renc.GetIncrementedValue(incremental, 10);
+  // printf("EXTI callback called!\r\n");
+ //    printf("gpio6!\r\n");
+ //    printf("dir: %d\r\n", incremental);
   }
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *AdcHandle){
 #ifdef DEBUG
-	printf("[DEBUG]: ADC callback\r\n");
-//	for(int i=0;i<ADC_CHAN_NUM;i++){
-//		printf("[DEBUG]: adc%d: %d\r\n", i, adcData[i]);
-//	}
+  // printf("[DEBUG]: ADC callback\r\n");
+  update_command_value();
+//  for(int i=0;i<ADC_CHAN_NUM;i++){
+//    printf("[DEBUG]: adc%d: %d\r\n", i, adcData[i]);
+//  }
 #endif
+}
+
+void update_command_value(){
+  int command_value = 0;
 }
 /* USER CODE END 4 */
 
