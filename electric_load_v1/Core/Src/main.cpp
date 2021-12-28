@@ -644,6 +644,7 @@ void update_command_value(){
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
+  // TODO: GPIO control(Safe Relay OPEN)
   printf("HAL API Error Occurred!\r\n");
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
